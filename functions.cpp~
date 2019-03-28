@@ -1,0 +1,270 @@
+#include<iostream>
+#include "memory.h"
+using namespace std;
+#define _CRT_SECURE_NO_WARNINGS
+
+unsigned int clockX;
+unsigned int numMisses;
+
+Block::Block()
+{
+	Block::last_used=0;
+	Block::valid=0;
+
+}
+
+int Block::isEmpty()
+{
+	if(Block::valid==0)
+		return 0;
+	else
+		return 1;
+
+}
+
+int MainMem::getData(int x)
+{
+	int blocknumber=x/WORDS_PER_BLOCK;
+	int blockoffset=x%WORDS_PER_BLOCK;
+	clockX=clockX+100;
+	return(blocks[blocknumber].words[blockoffset]);
+}
+int MainMem::putData(int x,int y)
+{
+	int blocknumber=x/WORDS_PER_BLOCK;
+	int blockoffset=x%WORDS_PER_BLOCK;
+	clockX=clockX+100;
+	blocks[blocknumber].words[blockoffset]=y;
+	blocks[blocknumber].data=tag;
+}
+
+MainMem::MainMem()
+{
+	int i,j;
+	for(i=0;i<BLOCKS_IN_MEMORY;i++)
+	{
+		for(j=0;j<WORDS_PER_BLOCK;j++)
+		{
+			blocks[i].words[j]=0;
+			
+		}
+		blocks[i].data=0;
+	}
+}
+
+Cache::Cache()
+{
+	int i,j;
+	for(i=0;i<BLOCKS_IN_CACHE/NUM_OF_SET;i++)
+	{
+		for(j=0;j<NUM_OF_SET;j++)
+		{
+			for(k=0;k<WORDS_PER_BLOCK;k++)
+			{
+				cblocks[i][j].words[k]=0;
+			
+			}
+			cblocks[i][j].data=0;
+		}	
+	}
+}
+
+
+
+int Cache::getData(int x)
+{
+int tag;
+int cacheline;
+int offset;
+offset=x%WORDS_PER_BLOCK;
+int reamaining=x/WORDS_PER_BLOCK;
+cacheline=remaining%(BLOCKS_PER_CACHE/NUM_OF_SET);
+tag=reamining/(BLOCKS_PER_CACHE/NUM_OF_SET);
+clockX+=2;
+for(int i=0;i<NUM_OF_SET;i++)
+{
+if(cblocks[cacheline][i].valid==0 && cblocks[cacheline][i].data==tag)
+{
+	hit=1;
+	clockX=clockX+2;
+	Cache::setBlockUsage(cacheline,i);
+	return(cblocks[cacheline][i].words[offset]);
+}
+else
+{
+	hit=0;
+	return(Cache::resolveMiss(x));
+}
+}
+}
+
+
+int Cache::putData(int x,int y)
+{
+int tag;
+int cacheline;
+int offset;
+offset=x%WORDS_PER_BLOCK;
+int reamaining=x/WORDS_PER_BLOCK;
+cacheline=remaining%(BLOCKS_PER_CACHE/NUM_OF_SET);
+tag=reamining/(BLOCKS_PER_CACHE/NUM_OF_SET);
+for(int i=0;i<NUM_OF_SET;i++)
+{
+if(cblocks[cacheline][i].valid==0 && cblocks[cacheline][i].data==tag)
+{
+	hit=1;
+	clockX=clockX+2;
+	Cache::setBlockUsage(cacheline,i);
+        cblocks[cacheline][i].valid=1;
+	cblocks[cacheline][i].words[offset]=y;
+	cblocks[cacheline][i].data=tag;
+	MainMem.putData(x,y);
+}
+if(hit==0)
+{
+	MainMem.putData(x,y);
+	resolveMiss(x);
+}
+}
+}
+
+void Cache::resolveMiss(int x);
+{
+int tag;
+int cacheline;
+int offset;
+int block_evicted=0;
+int line_evicted=0;
+int evicted=0;
+int address;
+offset=x%WORDS_PER_BLOCK;
+int reamaining=x/WORDS_PER_BLOCK;
+cacheline=remaining%(BLOCKS_PER_CACHE/NUM_OF_SET);
+tag=reamining/(BLOCKS_PER_CACHE/NUM_OF_SET);
+
+for(int i=0;i<BLOCKS_PER_CACHE/NUM_OF_SET;i++)
+{
+	for(int j=0;j<NUM_OF_SET;j++)
+	{
+              if(cblocks[block_evicted][line_evicted].last_used<cblocks[i][j].last_used  && cblocks[i][j].valid==1)
+	      {
+		      evicted=1;
+		      block_evicted=i;
+		      line_evicted=j;
+	      }
+	      
+
+
+
+        }
+if(evicted==1)
+{
+address=cblocks[block_evicted][line_evicted].data*(BLOCKS_PER_CACHE/NUM_OF_SET)*WORDS_PER_BLOCK;
+MainMem.putData(address,cblocks[block_evicted][line_evicted].words[0]);
+MainMem.putData(address+1,cblocks[block_evicted][line_evicted].words[1]);
+MainMem.putData(address+2,cblocks[block_evicted][line_evicted].words[2]);
+MainMem.putData(address+3,cblocks[block_evicted][line_evicted].words[3]);
+}
+Cache.setBlockUsage(block_evicted,line_evicted);
+clockX=clockX+100;
+int a= MainMem.getData(x);
+int b=MainMem.getData(x+1);
+int c=MainMem.getData(x+2);
+int d=MainMem.getData(x+3);
+Cache.putData(address,a);
+Cache.putData(address+1,b);
+Cache.putData(address+2,c);
+Cache.putData(address+3,d);
+}
+
+
+int Cache::getOldestBlock()
+	{
+		int oldest;
+		int m;
+		oldest=cblocks[0][0].lastused;
+		for(int i=0;i<BLOCKS_PER_CACHE/NUM_OF_SET;i++)
+		{
+		for(int j=0;j<NUM_OF_SET;j++)
+		{
+                   if(cblocks[i][j].lastused<oldest)
+		   {
+			   oldest=cblocks[i][j].lastused;
+			   m=i;
+		   }
+		}
+		}
+		return(m);
+		
+	}
+
+
+int Cache::showCacheBlock(int x,int y,int z)
+{
+	if(cblocks[x][y].vaid==1)
+	{
+		return(cblocks[x][y].words[z]);
+	}
+	else
+	return 0;
+
+}
+
+void Cache::setBlockUsage(int x,int i)
+{
+	cblocks[x][i].lastused++;
+}
+
+
+Memory::Memory()
+{
+clockX=0;
+numMisses=0;
+}
+
+int Memory::getData(int address)
+{
+return(myCache.getData(address));
+}
+
+void Memory::putData(int address,int value)
+{
+myCache.putData(address,value);
+}
+
+void Memory::resetClock()
+{
+	clockX=0;
+}
+
+unsigned int Memory::GetClock()
+{
+	return(clockX);
+}
+
+unsigned int Memory::setClock(unsigned int newtime)
+{
+	clockX=newtime;
+}
+
+unsigned int Memory::getNumCacheMisses()
+{
+	return(numMisses);
+}
+
+void Memory::setNumCacheMisses(unsigned int newval)
+{
+	numMisses=newval;
+}
+
+void Memory::showCacheAddress()
+{
+	for(int i=0;i<BLOCKS_IN_CACHE/NUM_OF_SET;i++)
+	{
+		for(int j=0;j<NUM_OF_SET;j++)
+		{
+			for(int k=0;k<WORDS_PER_BLOCK;k++)
+			{
+				cout<<myCache.showCacheBlock(
+			}
+}
